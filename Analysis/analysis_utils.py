@@ -60,13 +60,13 @@ def plot_numbers(my_numbers, winning_numbers):
     
     # Plot my numbers (top row)
     for idx, num in enumerate(my_numbers):
-        color = 'red' if num in matches else 'blue'
+        color = 'yellow' if num in matches else 'blue'
         plt.scatter(idx, 1, color=color, s=300, edgecolors='black', zorder=3)
         plt.text(idx, 1.15, str(num), ha='center', fontsize=12, fontweight='bold', zorder=4)
     
     # Plot winning numbers (bottom row)
     for idx, num in enumerate(winning_numbers):
-        color = 'red' if num in matches else 'blue'
+        color = 'yellow' if num in matches else 'blue'
         plt.scatter(idx, 0, color=color, s=300, edgecolors='black', zorder=3)
         plt.text(idx, -0.25, str(num), ha='center', fontsize=12, fontweight='bold', zorder=4)
     
@@ -79,7 +79,7 @@ def plot_numbers(my_numbers, winning_numbers):
                         "", 
                         xy=(win_idx, 0.05),      # From the center of the winning circle
                         xytext=(my_idx, 0.95),   # From the center of the player's circle
-                        arrowprops=dict(arrowstyle="->", color="red", lw=2),
+                        arrowprops=dict(arrowstyle="->", color="yellow", lw=2),
                         zorder=2
                     )
 
