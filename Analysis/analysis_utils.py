@@ -269,7 +269,6 @@ def analyze_even_odd(df, last_n_games=None):
     plt.tight_layout()
     plt.show()
 
-    return dist_even, dist_odd
 
 
 
@@ -343,8 +342,6 @@ def analyze_low_high(df, split_point=25, last_n_games=None):
     plt.tight_layout()
     plt.show()
 
-    return dist_low, dist_high
-
 
 def analyze_repeated_sequences(df_long):
     """
@@ -362,55 +359,99 @@ def analyze_repeated_sequences(df_long):
     else:
         print("Repeated combinations:\n", repeated)
 
-def analyze_consecutive_numbers(df_long):
+
+
+def analyze_consecutive_numbers(df_long, last_n_games=10):
     """
-    Analyzes how many pairs of consecutive numbers appear in each draw.
+    Analyzes how many pairs of consecutive numbers appear in each draw,
+    showing a horizontal bar plot with counts.
+
+    Parameters:
+        df_long (DataFrame): DataFrame con columnas 'fecha', 'bola', 'valor'.
+        last_n_games (int): número de últimos sorteos a considerar (default 10).
+
+    Returns:
+        None: Muestra gráfico.
     """
-    counts = []
+    # Filtrar últimos N juegos por fecha
+    fechas = sorted(df_long['fecha'].unique())
+    fechas_filtradas = fechas[-last_n_games:]
+    df_filtered = df_long[df_long['fecha'].isin(fechas_filtradas)]
     
-    for _, group in df_long[df_long["bola"] != "Boliyapa"].groupby("fecha"):
+    counts = []
+    for _, group in df_filtered[df_filtered["bola"] != "Boliyapa"].groupby("fecha"):
         nums = sorted(group["valor"])
         consecutive_pairs = sum((b - a) == 1 for a, b in zip(nums, nums[1:]))
         counts.append(consecutive_pairs)
     
-    plt.figure(figsize=(6,4))
-    sns.countplot(x=counts, palette="viridis")
-    plt.title("Number of consecutive pairs per draw")
-    plt.xlabel("Consecutive pairs")
-    plt.ylabel("Frequency")
+    # Contar frecuencia de ocurrencias
+    freq = pd.Series(counts).value_counts().sort_index()
+
+    # Configuración colores plomo y borde negro
+    color_plomo = "#4B4B4B"
+    edge_color = "black"
+    
+    fig, ax = plt.subplots(figsize=(6, 4))
+    
+    bars = ax.barh(freq.index.astype(str), freq.values, color=color_plomo, edgecolor=edge_color, linewidth=1.5)
+
+    # Etiquetas de dato (número encima de cada barra)
+    for bar in bars:
+        width = bar.get_width()
+        ax.text(width + 0.1, bar.get_y() + bar.get_height()/2,
+                f'{int(width)}', va='center', ha='left', fontsize=10, fontweight='bold')
+
+    ax.set_xlabel("Frequency")
+    ax.set_ylabel("Number of Consecutive Pairs")
+    ax.set_title(f"Number of Consecutive Pairs per Draw (Last {last_n_games} Draws)")
+
+    plt.tight_layout()
     plt.show()
 
-def analyze_transitions(df_long, top_n=10):
-    """
-    Shows a simple transition matrix: frequency with which a number appears
-    after another in the next draw.
-    """
+
+
+
+def analyze_transitions(df_long, top_n=10, last_n_games=None):
     df_main = df_long[df_long["bola"] != "Boliyapa"].copy()
     df_main = df_main.sort_values("fecha")
-    
-    # Group by date
+
+    if last_n_games is not None:
+        fechas = sorted(df_main['fecha'].unique())
+        df_main = df_main[df_main['fecha'].isin(fechas[-last_n_games:])]
+
     draws = df_main.groupby("fecha")["valor"].apply(set).tolist()
-    
+
     transitions = Counter()
     for prev, curr in zip(draws, draws[1:]):
         for p in prev:
             for c in curr:
                 transitions[(p, c)] += 1
-    
-    # Convert to DataFrame for display
+
     df_trans = pd.DataFrame([
         {"prev": p, "curr": c, "count": cnt}
         for (p, c), cnt in transitions.items()
     ])
-    
+
     top_pairs = df_trans.sort_values("count", ascending=False).head(top_n)
-    
-    plt.figure(figsize=(8,5))
-    sns.barplot(data=top_pairs, x="count", y=top_pairs.apply(lambda r: f"{r.prev}→{r.curr}", axis=1), palette="magma")
-    plt.title(f"Top {top_n} most frequent transitions between draws")
-    plt.xlabel("Frequency")
-    plt.ylabel("Transition")
+    top_pairs['transition'] = top_pairs.apply(lambda r: f"{r.prev}\u2192{r.curr}", axis=1)
+
+    plt.figure(figsize=(10,6))
+    ax = sns.barplot(data=top_pairs, y='transition', x='count', color="#4B4B4B", edgecolor="black")
+
+    # Agregar etiquetas de dato al final de cada barra
+    for p in ax.patches:
+        width = p.get_width()
+        ax.text(width + 0.1, p.get_y() + p.get_height()/2,
+                f'{int(width)}', va='center', ha='left', fontsize=10, fontweight='bold')
+
+    ax.set_xlabel("Frequency")
+    ax.set_ylabel("Transition")
+    ax.set_title(f"Top {top_n} Most Frequent Transitions Between Draws (Last {last_n_games if last_n_games else 'All'} Draws)")
+
+    plt.tight_layout()
     plt.show()
+
+
 
 
 
@@ -474,223 +515,185 @@ def analyze_number_frequency_highlight(df_long, top_n=10, last_n_games=None):
     plt.show()
 
 
-def analyze_repeats(df_tinka):
+
+def analyze_repeats(df_tinka, last_n_games=None):
     """
     Analyzes how many winning numbers repeat from one draw to the next.
-    
+
     Parameters:
         df_tinka (pd.DataFrame): DataFrame with columns ['fecha', 'bola', 'valor'].
-                                 Must contain the historical data of Tinka.
-                                 
+        last_n_games (int or None): Number of last draws to consider.
+
     Returns:
         pd.DataFrame: Count and percentage of matches.
     """
-    # Filter only the 6 main balls (without Boliyapa)
     df_main = df_tinka[df_tinka['bola'].str.startswith('B') & (df_tinka['bola'] != 'Boliyapa')]
-    
-    # Group by date and create lists of drawn numbers
+
+    # Filtrar últimos N juegos si aplica
+    fechas = sorted(df_main['fecha'].unique())
+    if last_n_games is not None:
+        fechas = fechas[-last_n_games-1:]  # +1 porque comparamos pares consecutivos
+    df_main = df_main[df_main['fecha'].isin(fechas)]
+
     draws = df_main.groupby('fecha')['valor'].apply(list).reset_index()
     draws = draws.sort_values('fecha').reset_index(drop=True)
-    
-    repeat_counts = []
 
-    # Compare each draw with the previous one
+    repeat_counts = []
     for i in range(1, len(draws)):
         prev_set = set(draws.loc[i-1, 'valor'])
         curr_set = set(draws.loc[i, 'valor'])
         matches = len(prev_set & curr_set)
         repeat_counts.append(matches)
-    
-    # Count occurrences
+
     count_distribution = Counter(repeat_counts)
-    
-    # Convert to DataFrame for display
+
     df_counts = pd.DataFrame({
         'Matches': list(count_distribution.keys()),
         'Frequency': list(count_distribution.values())
     }).sort_values('Matches').reset_index(drop=True)
-    
-    # Calculate percentage
+
     total_compared = len(repeat_counts)
     df_counts['Percentage'] = (df_counts['Frequency'] / total_compared * 100).round(2)
-    
-    # Plot histogram
+
+    # Graficar
     plt.figure(figsize=(8, 5))
-    plt.bar(df_counts['Matches'], df_counts['Frequency'], color='skyblue', edgecolor='black')
+    color_plomo = "#4B4B4B"
+    plt.bar(df_counts['Matches'], df_counts['Frequency'], color=color_plomo, edgecolor='black')
     plt.xlabel("Number of matches with the previous draw")
     plt.ylabel("Frequency")
-    plt.title("Distribution of matches between consecutive draws")
-    
-    # Show percentages on the bars
-    for i, (x, y, pct) in enumerate(zip(df_counts['Matches'], df_counts['Frequency'], df_counts['Percentage'])):
-        plt.text(x, y + 0.5, f"{pct}%", ha='center', fontsize=9)
-    
-    plt.xticks(range(0, 7))  # Only values 0 to 6
+    plt.title(f"Distribution of matches between consecutive draws (Last {last_n_games if last_n_games else 'All'} draws)")
+    plt.xticks(range(0, 7))
     plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Etiquetas porcentaje arriba de barras
+    for x, y, pct in zip(df_counts['Matches'], df_counts['Frequency'], df_counts['Percentage']):
+        plt.text(x, y + 0.3, f"{pct}%", ha='center', fontsize=9, fontweight='bold')
+
+    plt.tight_layout()
     plt.show()
-    
 
 
-def analyze_ball_position_ranges(df_tinka, range_step=10):
-    """
-    Analyzes the distribution of each ball by its position (sorted from lowest to highest)
-    and shows percentages of occurrence by ranges.
-    
-    Parameters:
-        df_tinka (pd.DataFrame): DataFrame with columns ['fecha', 'bola', 'valor'].
-                                 Must contain the historical data of Tinka.
-        range_step (int): Size of the range to group values (default 10).
-    
-    Returns:
-        dict: Dictionary with percentage statistics by range for each position.
-    """
-    # Filter only main balls (B1 to B6)
+
+
+def analyze_ball_position_ranges(df_tinka, range_step=10, last_n_games=None):
     df_main = df_tinka[df_tinka['bola'].str.startswith('B') & (df_tinka['bola'] != 'Boliyapa')]
     
-    # Group by date and sort each draw
+    fechas = sorted(df_main['fecha'].unique())
+    if last_n_games is not None:
+        fechas = fechas[-last_n_games:]
+    df_main = df_main[df_main['fecha'].isin(fechas)]
+
     draws_sorted = df_main.groupby('fecha')['valor'].apply(lambda x: sorted(x)).reset_index()
-    
-    # Create structure to store ranges
+
     ball_positions = {f"Ball {i+1}": [] for i in range(6)}
-    
-    # Fill with values by position
     for _, row in draws_sorted.iterrows():
         for i, val in enumerate(row['valor']):
             ball_positions[f"Ball {i+1}"].append(val)
-    
+
     stats_by_position = {}
-    
     plt.figure(figsize=(14, 8))
-    
+
     for i, (ball_name, values) in enumerate(ball_positions.items(), start=1):
         values_arr = np.array(values)
-        
-        # Calculate ranges
         max_val = values_arr.max()
         bins = list(range(1, max_val + range_step, range_step))
         hist, bin_edges = np.histogram(values_arr, bins=bins)
-        
-        # Calculate percentages
         percentages = (hist / hist.sum() * 100).round(2)
-        
-        # Save in dictionary
+
         stats_df = pd.DataFrame({
             'Range': [f"{bin_edges[j]}-{bin_edges[j+1]-1}" for j in range(len(hist))],
-            'Frequency': hist,
             'Percentage': percentages
         })
         stats_by_position[ball_name] = stats_df
-        
-        # Plot
+
         plt.subplot(2, 3, i)
-        plt.bar(stats_df['Range'], stats_df['Percentage'], color='skyblue', edgecolor='black')
+        sns.barplot(x='Range', y='Percentage', data=stats_df,
+                    color="#4B4B4B", edgecolor="black")
         plt.title(f"{ball_name} - Distribution by ranges")
         plt.xticks(rotation=45)
         plt.ylabel("%")
         plt.grid(axis='y', linestyle='--', alpha=0.7)
-    
-    plt.suptitle("Distribution of each ball by position and range", fontsize=16, y=1.02)
+
+    plt.suptitle(f"Distribution of each ball by position and range (Last {last_n_games if last_n_games else 'All'} draws)", fontsize=16, y=1.02)
     plt.tight_layout()
     plt.show()
 
-def analyze_optimal_ranges_per_position(df_tinka, bins=5):
-    """
-    Analyzes the distribution of each ball by position (sorted) and determines optimal ranges.
-    
-    Parameters:
-        df_tinka (pd.DataFrame): DataFrame with columns ['fecha', 'bola', 'valor'].
-        bins (int): Number of ranges to create per position (quantiles).
-    
-    Returns:
-        dict: Optimal ranges by position with percentages.
-    """
-    # Filter only main balls (B1 to B6)
+
+
+def analyze_optimal_ranges_per_position(df_tinka, bins=5, last_n_games=None):
     df_main = df_tinka[df_tinka['bola'].str.startswith('B') & (df_tinka['bola'] != 'Boliyapa')]
     
-    # Group by date and sort each draw
+    fechas = sorted(df_main['fecha'].unique())
+    if last_n_games is not None:
+        fechas = fechas[-last_n_games:]
+    df_main = df_main[df_main['fecha'].isin(fechas)]
+
     draws_sorted = df_main.groupby('fecha')['valor'].apply(lambda x: sorted(x)).reset_index()
-    
+
     ball_positions = {f"Ball {i+1}": [] for i in range(6)}
-    
-    # Fill lists for each position
     for _, row in draws_sorted.iterrows():
         for i, val in enumerate(row['valor']):
             ball_positions[f"Ball {i+1}"].append(val)
-    
+
     stats_by_position = {}
-    
     plt.figure(figsize=(14, 8))
-    
+
     for i, (ball_name, values) in enumerate(ball_positions.items(), start=1):
         values_arr = np.array(values)
-        
-        # Calculate quantiles for optimal cuts
-        quantile_edges = np.linspace(0, 1, bins+1)
+        quantile_edges = np.linspace(0, 1, bins + 1)
         edges = np.unique(np.percentile(values_arr, quantile_edges * 100).astype(int))
-        
-        # Ensure that the edges cover everything
         edges[0] = 1
         edges[-1] = 50
-        
+
         hist, bin_edges = np.histogram(values_arr, bins=edges)
         percentages = (hist / hist.sum() * 100).round(2)
-        
+
         stats_df = pd.DataFrame({
             'Range': [f"{bin_edges[j]}-{bin_edges[j+1]}" for j in range(len(hist))],
-            'Frequency': hist,
             'Percentage': percentages
         })
         stats_by_position[ball_name] = stats_df
-        
-        # Plot
+
         plt.subplot(2, 3, i)
-        plt.bar(stats_df['Range'], stats_df['Percentage'], color='lightgreen', edgecolor='black')
+        sns.barplot(x='Range', y='Percentage', data=stats_df,
+                    color="#4B4B4B", edgecolor="black")
         plt.title(f"{ball_name} - Optimal Ranges")
         plt.xticks(rotation=45)
         plt.ylabel("%")
         plt.grid(axis='y', linestyle='--', alpha=0.7)
-    
-    plt.suptitle("Distribution and Optimal Ranges by Position", fontsize=16, y=1.02)
+
+    plt.suptitle(f"Distribution and Optimal Ranges by Position (Last {last_n_games if last_n_games else 'All'} draws)", fontsize=16, y=1.02)
     plt.tight_layout()
     plt.show()
 
 
-def plot_histograms_per_position(df_tinka):
-    """
-    Displays independent histograms for each ball by position.
-    
-    Parameters:
-        df_tinka (pd.DataFrame): DataFrame with columns ['fecha', 'bola', 'valor'].
-    
-    Returns:
-        dict: List of values by position.
-    """
-    # Filter only main balls (B1 to B6)
+
+def plot_histograms_per_position(df_tinka, last_n_games=None):
     df_main = df_tinka[df_tinka['bola'].str.startswith('B') & (df_tinka['bola'] != 'Boliyapa')]
     
-    # Group by date and sort each draw
+    fechas = sorted(df_main['fecha'].unique())
+    if last_n_games is not None:
+        fechas = fechas[-last_n_games:]
+    df_main = df_main[df_main['fecha'].isin(fechas)]
+
     draws_sorted = df_main.groupby('fecha')['valor'].apply(lambda x: sorted(x)).reset_index()
-    
+
     ball_positions = {f"Ball {i+1}": [] for i in range(6)}
-    
-    # Fill lists for each position
     for _, row in draws_sorted.iterrows():
         for i, val in enumerate(row['valor']):
             ball_positions[f"Ball {i+1}"].append(val)
-    
-    # Plot histograms
+
     plt.figure(figsize=(14, 8))
+
     for i, (ball_name, values) in enumerate(ball_positions.items(), start=1):
         plt.subplot(2, 3, i)
-        plt.hist(values, bins=range(1, 52), color='skyblue', edgecolor='black', align='left')
+        sns.histplot(values, bins=range(1, 52), color="#4B4B4B", edgecolor="black")
         plt.title(f"{ball_name} - Histogram")
         plt.xlabel("Number")
         plt.ylabel("Frequency")
-        plt.xticks(range(1, 51, 2))  # Numbers from 1 to 50 every 2 to avoid crowding
+        plt.xticks(range(1, 51, 2))
         plt.grid(axis='y', linestyle='--', alpha=0.7)
-    
-    plt.suptitle("Historical Distribution by Position (Ordered Balls)", fontsize=16, y=1.02)
+
+    plt.suptitle(f"Historical Distribution by Position (Last {last_n_games if last_n_games else 'All'} draws)", fontsize=16, y=1.02)
     plt.tight_layout()
     plt.show()
-
-
