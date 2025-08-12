@@ -146,16 +146,33 @@ def analyze_number_frequency(df):
     """
 
     freq = df[df["bola"] != "Boliyapa"]["valor"].value_counts().sort_index()
-    
-    plt.figure(figsize=(10, 4))
-    plt.bar(freq.index, freq.values)
+    freq_df = pd.DataFrame({"Number": freq.index, "Frequency": freq.values})
+
+    plt.figure(figsize=(12, 5))
+
+    # Estilo seaborn para mejorar estética
+    sns.set_style("whitegrid")
+
+    # Color plomo oscuro: #4B4B4B o similar
+    # Borde negro en las barras
+    bars = plt.bar(freq_df["Number"], freq_df["Frequency"],
+                   color="#4B4B4B", edgecolor="black", linewidth=1.2)
+
     plt.xlabel("Number")
     plt.ylabel("Frequency")
     plt.title("Frequency of number occurrences (without Boliyapa)")
-    plt.grid(axis='y', linestyle="--", alpha=0.7)
+
+    # Mostrar todos los números en el eje x
+    plt.xticks(freq_df["Number"], rotation=0)
+
+    # Mejorar visibilidad del grid solo en el eje y
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    plt.tight_layout()
     plt.show()
-    
-    return pd.DataFrame({"Number": freq.index, "Frequency": freq.values})
+
+    return freq_df
+
 
 def hot_and_cold_numbers(df, recent_draws=10):
     """
@@ -293,18 +310,64 @@ def analyze_transitions(df_long, top_n=10):
     plt.show()
 
 
-def analyze_rare_numbers(df_long, top_n=10):
+
+
+def analyze_number_frequency_highlight(df_long, top_n=10, last_n_games=None):
     """
-    Shows the least frequent numbers in history.
+    Shows the frequency of numbers ordered from highest to lowest,
+    highlighting the top N most frequent in blue and bottom N least frequent in red.
+    Optionally, analyze only the last N games.
+
+    Parameters:
+        df_long (DataFrame): DataFrame with columns 'fecha', 'bola', 'valor'.
+        top_n (int): Number of top and bottom numbers to highlight.
+        last_n_games (int or None): If set, analyze only last N unique 'fecha' games.
+
+    Returns:
+        None: Displays the plot.
     """
-    nums = df_long[df_long["bola"] != "Boliyapa"]["valor"]
-    freq = nums.value_counts().sort_values().head(top_n)
-    
-    plt.figure(figsize=(8,4))
-    sns.barplot(x=freq.index, y=freq.values, palette="coolwarm")
-    plt.title(f"Top {top_n} least frequent numbers")
+
+    # Filtrar solo últimas fechas si se indica
+    if last_n_games is not None:
+        # Obtener las fechas únicas ordenadas de forma ascendente
+        fechas_unicas = sorted(df_long['fecha'].unique())
+        # Tomar las últimas fechas
+        fechas_filtradas = fechas_unicas[-last_n_games:]
+        df_filtered = df_long[df_long['fecha'].isin(fechas_filtradas)]
+    else:
+        df_filtered = df_long
+
+    # Filtrar bolas distintas de 'Boliyapa'
+    nums = df_filtered[df_filtered["bola"] != "Boliyapa"]["valor"]
+
+    freq = nums.value_counts().sort_values(ascending=False)
+    freq_df = pd.DataFrame({"Number": freq.index, "Frequency": freq.values})
+
+    # Ordenar de mayor a menor explícitamente
+    freq_df = freq_df.sort_values(by="Frequency", ascending=False).reset_index(drop=True)
+
+    # Colores
+    base_color = "#4B4B4B"  # plomo oscuro
+    top_color = "#1f77b4"   # azul profesional
+    bottom_color = "#d62728"  # rojo profesional
+
+    n = len(freq_df)
+    colors = [top_color if i < top_n else bottom_color if i >= n - top_n else base_color for i in range(n)]
+
+    plt.figure(figsize=(14, 5))
+    sns.set_style("whitegrid")
+
+    bars = plt.bar(range(n), freq_df["Frequency"], color=colors, edgecolor="black", linewidth=1)
+
     plt.xlabel("Number")
     plt.ylabel("Frequency")
+    plt.title(f"Number Frequencies with Top {top_n} (blue) and Bottom {top_n} (red) Highlighted"
+              + (f" in Last {last_n_games} Games" if last_n_games else ""))
+
+    plt.xticks(ticks=range(n), labels=freq_df["Number"], rotation=0)
+
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
     plt.show()
 
 
