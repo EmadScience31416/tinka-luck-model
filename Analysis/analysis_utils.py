@@ -198,50 +198,153 @@ def hot_and_cold_numbers(df, recent_draws=10):
     
     return hot_numbers, cold_numbers
 
-def analyze_even_odd(df):
+
+
+def analyze_even_odd(df, last_n_games=None):
     """
     Analyzes how many even and odd numbers tend to appear in each draw.
-    
-    Parameters:
-        df (DataFrame): Historical Tinka data.
-    
-    Returns:
-        Series: Count of occurrences by number of evens.
-    """
-    non_boliyapa = df[df["bola"] != "Boliyapa"]
-    even_counts = non_boliyapa.groupby("fecha")["valor"].apply(lambda x: sum(n % 2 == 0 for n in x))
-    
-    dist = even_counts.value_counts().sort_index()
-    plt.bar(dist.index, dist.values)
-    plt.xlabel("Number of even numbers")
-    plt.ylabel("Frequency of draws")
-    plt.title("Distribution of evens in draws")
-    plt.show()
-    
-    return dist
+    Shows two side-by-side bar charts: distribution of even counts and odd counts per draw,
+    with data labels and colored borders.
 
-def analyze_low_high(df, split_point=25):
+    Parameters:
+        df (DataFrame): Historical Tinka data with columns 'fecha', 'bola', 'valor'.
+        last_n_games (int or None): If set, analyze only last N unique 'fecha' games.
+
+    Returns:
+        Tuple of Series: (even_counts_distribution, odd_counts_distribution)
+    """
+
+    # Filtrar fechas si se indica
+    if last_n_games is not None:
+        fechas_unicas = sorted(df['fecha'].unique())
+        fechas_filtradas = fechas_unicas[-last_n_games:]
+        df = df[df['fecha'].isin(fechas_filtradas)]
+
+    # Excluir Boliyapa
+    non_boliyapa = df[df["bola"] != "Boliyapa"]
+
+    # Calcular número de pares e impares por fecha
+    even_counts = non_boliyapa.groupby("fecha")["valor"].apply(lambda x: sum(n % 2 == 0 for n in x))
+    odd_counts = non_boliyapa.groupby("fecha")["valor"].apply(lambda x: sum(n % 2 == 1 for n in x))
+
+    # Distribuciones de frecuencia ordenadas
+    dist_even = even_counts.value_counts().sort_index()
+    dist_odd = odd_counts.value_counts().sort_index()
+
+    sns.set_style("whitegrid")
+    base_color = "#4B4B4B"  # plomo oscuro
+    blue_edge = "#1F4E78"
+    red_edge = "#C00000"
+
+    fig, axes = plt.subplots(1, 2, figsize=(14,5), sharey=True)
+
+    # Gráfico pares
+    bars_even = sns.barplot(x=dist_even.index, y=dist_even.values, ax=axes[0],
+                           color=base_color, edgecolor=blue_edge, linewidth=2)
+    axes[0].set_title("Distribution of Even Numbers per Draw")
+    axes[0].set_xlabel("Number of Even Numbers")
+    axes[0].set_ylabel("Frequency of Draws")
+    axes[0].grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Etiquetas en barras pares
+    for bar in bars_even.patches:
+        height = bar.get_height()
+        axes[0].text(bar.get_x() + bar.get_width()/2, height + 0.1, f'{int(height)}',
+                     ha='center', va='bottom', fontsize=9)
+
+    # Gráfico impares
+    bars_odd = sns.barplot(x=dist_odd.index, y=dist_odd.values, ax=axes[1],
+                          color=base_color, edgecolor=red_edge, linewidth=2)
+    axes[1].set_title("Distribution of Odd Numbers per Draw")
+    axes[1].set_xlabel("Number of Odd Numbers")
+    axes[1].set_ylabel("")
+    axes[1].grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Etiquetas en barras impares
+    for bar in bars_odd.patches:
+        height = bar.get_height()
+        axes[1].text(bar.get_x() + bar.get_width()/2, height + 0.1, f'{int(height)}',
+                     ha='center', va='bottom', fontsize=9)
+
+    plt.tight_layout()
+    plt.show()
+
+    return dist_even, dist_odd
+
+
+
+def analyze_low_high(df, split_point=25, last_n_games=None):
     """
     Analyzes how many low and high numbers tend to appear in each draw.
-    
+    Shows two side-by-side bar charts: distribution of low counts and high counts per draw,
+    with data labels and colored borders.
+
     Parameters:
-        df (DataFrame): Historical Tinka data.
-        split_point (int): Number that divides the low/high range.
-    
+        df (DataFrame): Historical Tinka data with columns 'fecha', 'bola', 'valor'.
+        split_point (int): Number dividing low and high numbers.
+        last_n_games (int or None): If set, analyze only last N unique 'fecha' games.
+
     Returns:
-        Series: Count of occurrences by number of lows.
+        Tuple of Series: (low_counts_distribution, high_counts_distribution)
     """
+
+    # Filtrar fechas si se indica
+    if last_n_games is not None:
+        fechas_unicas = sorted(df['fecha'].unique())
+        fechas_filtradas = fechas_unicas[-last_n_games:]
+        df = df[df['fecha'].isin(fechas_filtradas)]
+
+    # Excluir Boliyapa
     non_boliyapa = df[df["bola"] != "Boliyapa"]
+
+    # Calcular número de bajos y altos por fecha
     low_counts = non_boliyapa.groupby("fecha")["valor"].apply(lambda x: sum(n <= split_point for n in x))
-    
-    dist = low_counts.value_counts().sort_index()
-    plt.bar(dist.index, dist.values)
-    plt.xlabel(f"Number of numbers ≤ {split_point}")
-    plt.ylabel("Frequency of draws")
-    plt.title("Distribution of low numbers in draws")
+    high_counts = non_boliyapa.groupby("fecha")["valor"].apply(lambda x: sum(n > split_point for n in x))
+
+    # Distribuciones de frecuencia ordenadas
+    dist_low = low_counts.value_counts().sort_index()
+    dist_high = high_counts.value_counts().sort_index()
+
+    sns.set_style("whitegrid")
+    base_color = "#4B4B4B"  # plomo oscuro
+    blue_edge = "#1f77b4"
+    red_edge = "#d62728"
+
+    fig, axes = plt.subplots(1, 2, figsize=(14,5), sharey=True)
+
+    # Gráfico bajos
+    bars_low = sns.barplot(x=dist_low.index, y=dist_low.values, ax=axes[0],
+                           color=base_color, edgecolor=blue_edge, linewidth=2)
+    axes[0].set_title(f"Distribution of Numbers ≤ {split_point} per Draw")
+    axes[0].set_xlabel(f"Count of numbers ≤ {split_point}")
+    axes[0].set_ylabel("Frequency of Draws")
+    axes[0].grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Etiquetas en barras bajos
+    for bar in bars_low.patches:
+        height = bar.get_height()
+        axes[0].text(bar.get_x() + bar.get_width()/2, height + 0.1, f'{int(height)}',
+                     ha='center', va='bottom', fontsize=9)
+
+    # Gráfico altos
+    bars_high = sns.barplot(x=dist_high.index, y=dist_high.values, ax=axes[1],
+                          color=base_color, edgecolor=red_edge, linewidth=2)
+    axes[1].set_title(f"Distribution of Numbers > {split_point} per Draw")
+    axes[1].set_xlabel(f"Count of numbers > {split_point}")
+    axes[1].set_ylabel("")
+    axes[1].grid(axis='y', linestyle='--', alpha=0.7)
+
+    # Etiquetas en barras altos
+    for bar in bars_high.patches:
+        height = bar.get_height()
+        axes[1].text(bar.get_x() + bar.get_width()/2, height + 0.1, f'{int(height)}',
+                     ha='center', va='bottom', fontsize=9)
+
+    plt.tight_layout()
     plt.show()
-    
-    return dist
+
+    return dist_low, dist_high
+
 
 def analyze_repeated_sequences(df_long):
     """
